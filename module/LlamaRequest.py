@@ -29,6 +29,9 @@ def llm_ask(message, hideThinking=True, model="qwen3:8b-q4_K_M"):
         else:
             x = x[0]
 
+    print('---')
+    print(message)
+    print(x)
     return x
 
 def llm_embedding(text, model="bge-m3"):
