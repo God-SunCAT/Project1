@@ -75,7 +75,7 @@ class AAL:
                 cognition.append(item['content'])
             
         # 写入向量数据库
-        # print(cognition)
+        print(cognition)
             
         
 core = AAL()
