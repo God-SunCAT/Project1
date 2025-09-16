@@ -14,7 +14,7 @@ class SimpleVectorDB:
         self.max_elements = max_elements
         self.persist_path = persist_path
         self.id_map = set()
-        self.text_store = {}  # id -> 原始文本
+        self.data_store = {}  # id -> 原始数据
 
         self.index = hnswlib.Index(space='cosine', dim=dim)
 
@@ -22,10 +22,10 @@ class SimpleVectorDB:
             # 加载已有索引
             self.index.load_index(persist_path + ".index", max_elements=max_elements)
             # 尝试加载文本数据
-            if os.path.exists(persist_path + "_texts.pkl"):
-                with open(persist_path + "_texts.pkl", "rb") as f:
-                    self.text_store = pickle.load(f)
-            self.id_map = set(self.text_store.keys())
+            if os.path.exists(persist_path + "_data.pkl"):
+                with open(persist_path + "_data.pkl", "rb") as f:
+                    self.data_store = pickle.load(f)
+            self.id_map = set(self.data_store.keys())
         else:
             self.index.init_index(max_elements=max_elements, ef_construction=100, M=16)
 
@@ -34,7 +34,7 @@ class SimpleVectorDB:
         # 用于生成自增 id
         self.next_id = max(self.id_map, default=0) + 1
 
-    def add(self, vector, text=None, id=None):
+    def add(self, vector, data=None, id=None):
         """
         vector: embedding 向量
         text: 可选，原始文本/数据
@@ -54,8 +54,8 @@ class SimpleVectorDB:
         self.index.add_items(vector.reshape(1, -1), np.array([id]))
         self.id_map.add(id)
 
-        if text is not None:
-            self.text_store[id] = text
+        if data is not None:
+            self.data_store[id] = data
 
         self._maybe_persist()
         return id
@@ -64,11 +64,11 @@ class SimpleVectorDB:
         if id in self.id_map:
             self.index.mark_deleted(id)
             self.id_map.remove(id)
-            if id in self.text_store:
-                del self.text_store[id]
+            if id in self.data_store:
+                del self.data_store[id]
             self._maybe_persist()
 
-    def query(self, vector, k=5, return_text=True):
+    def query(self, vector, k=5, return_data=True):
         vector = np.array(vector, dtype='float32')
 
         # 修正 k，防止超过已有数量
@@ -81,8 +81,8 @@ class SimpleVectorDB:
         labels_list = labels[0].tolist()
         distances_list = distances[0].tolist()
 
-        if return_text:
-            results = [(self.text_store.get(l, None), d) for l, d in zip(labels_list, distances_list)]
+        if return_data:
+            results = [(self.data_store.get(l, None), d) for l, d in zip(labels_list, distances_list)]
         else:
             results = list(zip(labels_list, distances_list))
         return results
@@ -91,4 +91,10 @@ class SimpleVectorDB:
         if self.persist_path:
             self.index.save_index(self.persist_path + ".index")
             with open(self.persist_path + "_texts.pkl", "wb") as f:
-                pickle.dump(self.text_store, f)
+                pickle.dump(self.data_store, f)
+
+# db = SimpleVectorDB()
+# db.add(np.random.rand(1024), {"content": "aaa", "ida": 2})
+# db.add(np.random.rand(1024), {"content": "bbb", "ida": 3, 'pica': 1})
+# db.add(np.random.rand(1024), {"content": "ccc", "ida": 2})
+# print(db.query(np.random.rand(1024)))

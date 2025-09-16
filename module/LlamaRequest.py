@@ -1,5 +1,13 @@
+import logging
 import requests
 import json
+
+logging.basicConfig(
+    level=logging.INFO,
+    filename="AAL.log",
+    filemode="a",
+    format="%(asctime)s - %(levelname)s -\n%(message)s"
+)
 
 def llm_ask(message, hideThinking=True, model="qwen3:8b-q4_K_M"):
     """
@@ -13,7 +21,6 @@ def llm_ask(message, hideThinking=True, model="qwen3:8b-q4_K_M"):
     }
 
     response = requests.post(url, json=payload, stream=True)
-
     answer = []
     for line in response.iter_lines():
         if line:
@@ -23,16 +30,23 @@ def llm_ask(message, hideThinking=True, model="qwen3:8b-q4_K_M"):
 
     x = "".join(answer)
     if(hideThinking):
-        x = x.split("</think>")
-        if(len(x) > 1):
-            x = ''.join(x[1:])
+        x2 = x.split("</think>")
+        if(len(x2) > 1):
+            x2 = ''.join(x2[1:])
         else:
-            x = x[0]
+            x2 = x2[0]
 
-    # print('---')
-    # print(message)
-    # print(x)
-    return x
+    logging.info(f'''
+----
+<llm_ask>
+QUESTION:
+{message}
+ANSWER:
+{x}
+----
+''')
+    
+    return x2
 
 def llm_embedding(text, model="bge-m3"):
     """
@@ -49,6 +63,10 @@ def llm_embedding(text, model="bge-m3"):
 
     response = requests.post(url, json=payload)
     data = response.json()
-
     return data["embedding"]
 
+llm_ask("asd")
+print(1)
+llm_embedding("asd")
+print(2)
+llm_ask("asd")
