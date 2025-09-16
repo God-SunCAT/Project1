@@ -48,7 +48,7 @@ ANSWER:
     
     return x2
 
-def llm_embedding(text, model="bge-m3"):
+def llm_embedding(text, model="bge-m3-cpu"):
     """
     调用 Ollama 本地 embedding 接口，获取文本向量。
     text: 需要生成 embedding 的文本
@@ -64,9 +64,3 @@ def llm_embedding(text, model="bge-m3"):
     response = requests.post(url, json=payload)
     data = response.json()
     return data["embedding"]
-
-llm_ask("asd")
-print(1)
-llm_embedding("asd")
-print(2)
-llm_ask("asd")

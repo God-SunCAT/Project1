@@ -1,4 +1,5 @@
 import json
+import numpy as np
 from module.VectorDB import SimpleVectorDB
 from module.LlamaRequest import llm_ask, llm_embedding
 
@@ -9,7 +10,7 @@ class AAL:
         pass
     
     def ask(self, context):
-        return 'Hello'
+        pass
     
     def selfModeling(self, context, me=None):
         # 注意：context表示上下文，content表示回复内容
@@ -81,7 +82,9 @@ class AAL:
 并且，根据所提供的数据决定事件重要程度（重要程度从1到10）。
 要求以描述性的语句回答，简短精要，尽量不适用复杂华丽的修饰，要求以白话形式描述，而非文学语言。
 每条context必须具备完备性，其自身就具备所有必须内容，不需要其他上下文补充解释。
-若输入文本为常规文本材料，默认文本撰写者即“我”；若为连续对话类材料，默认“Alice”为“我”（自行根据上下文推断指代）
+若输入文本为常规文本材料，默认文本撰写者即“我”；若为连续对话类材料，默认“{'Alice' if me == None else me}”为“我”（自行根据上下文推断指代）
+若提供了发言者，但却只有一条信息，默认按照书信理解。
+注意：
 特别注意，不可使用"你""他们"这样的抽象代词，必须使用具体指代如姓名、组织名、具体关系名（请自行根据上下文推断指代）。
 特别注意，输出内容不必包含预先提供数据，其为“我”的内在思考，只作为辅助判断的参考数据使用。
 要求回复必须以严格JSON格式输出，不得包含其他内容。
@@ -106,9 +109,8 @@ class AAL:
             if(not 'content' in item or not 'weight' in item):
                 return
             self.MemDB.add(llm_embedding(item['content']), item)
-        print(cognition)
-            
-        
+
+
 core = AAL()
 core.selfModeling(
 '''

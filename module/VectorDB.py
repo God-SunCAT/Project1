@@ -90,7 +90,7 @@ class SimpleVectorDB:
     def _maybe_persist(self):
         if self.persist_path:
             self.index.save_index(self.persist_path + ".index")
-            with open(self.persist_path + "_texts.pkl", "wb") as f:
+            with open(self.persist_path + "_data.pkl", "wb") as f:
                 pickle.dump(self.data_store, f)
 
 # db = SimpleVectorDB()

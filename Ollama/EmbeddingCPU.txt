@@ -1,0 +1,2 @@
+ollama create my-embedding -f Modelfile
+根据配置文件创建一个新CPU模型，然后调用这个模型
