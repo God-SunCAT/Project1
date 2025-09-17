@@ -1,18 +1,26 @@
 import streamlit as st
 import numpy as np
-import pickle
-import os
-from module.VectorDB import SimpleVectorDB  # 假设你把上面类放在 simple_vector_db.py 里
+from module.VectorDB import SimpleVectorDB  # 假设你把上面类放在 module/VectorDB.py 里
 from module.LlamaRequest import llm_embedding
-# ========================
-# 初始化或加载数据库
-# ========================
+import os
 # streamlit run dbViewer.py
-persist_path = "./db/SelfModeling_VectorDB"  # 你的持久化路径
-# persist_path = "./db/Memory_VectorDB"  # 你的持久化路径
-db = SimpleVectorDB(dim=1024, persist_path=persist_path)
+# ========================
+# 数据库路径选择
+# ========================
+db_options = {
+    "SelfModeling_VectorDB": "./db/SelfModeling_VectorDB",
+    "Memory_VectorDB": "./db/Memory_VectorDB"
+}
 
 st.title("🧩 SimpleVectorDB 可视化查看器")
+
+db_choice = st.selectbox("选择要操作的数据库", list(db_options.keys()))
+persist_path = db_options[db_choice]
+
+# 初始化数据库
+db = SimpleVectorDB(dim=1024, persist_path=persist_path)
+
+st.success(f"当前数据库：{db_choice} ({persist_path})")
 
 # ========================
 # 添加向量
@@ -36,7 +44,7 @@ top_k = st.slider("返回数量 k", 1, 10, 5)
 
 if st.button("查询"):
     if query_text.strip():
-        query_vector = llm_embedding(query_text) # 这里可替换为 embedding
+        query_vector = llm_embedding(query_text)  # 这里可替换为 embedding
         results = db.query(query_vector, k=top_k)
         st.subheader("🔍 查询结果")
         for i, (data, dist) in enumerate(results):
@@ -55,7 +63,7 @@ else:
     for idx, (id, data) in enumerate(db.data_store.items()):
         with st.expander(f"ID: {id}"):
             st.json(data)
-            if st.button(f"删除 ID {id}", key=f"del_{id}"):
+            if st.button(f"删除 ID {id}", key=f"del_{id}_{db_choice}"):
                 db.remove(id)
                 st.warning(f"已删除 ID {id}")
                 st.experimental_rerun()
