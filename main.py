@@ -8,4 +8,4 @@ print("Project1 - An Advanced Artificial Life")
 while(True):
     print("User:", end=" ")
     x = input()
-    print("Alice:", core.ask(x))
+    print("伊芙:", core.ask(x))

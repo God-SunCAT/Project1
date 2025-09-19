@@ -3,6 +3,7 @@ import numpy as np
 from module.VectorDB import SimpleVectorDB
 from module.LlamaRequest import llm_ask, llm_embedding
 
+# 注意，标准的json最后一项没有 , 并且，只使用"
 class AAL:
     def __init__(self):
         self.SelfDB = SimpleVectorDB(1024, 10000, "./db/SelfModeling_VectorDB")
@@ -25,7 +26,7 @@ class AAL:
 输出示例(要求以严格的JSON示例输出，不得输出其他任何内容。self表示自我建模，mem表示记忆建模)：
 [
 {{"self": "我是否渴望通过控制他人来获得自我价值感？"}},
-{{"mem": "我是否曾试图通过控制他人来满足自己的情感需求？"}},
+{{"mem": "我是否曾试图通过控制他人来满足自己的情感需求？"}}
 ]
 本次任务文本：
 {context}
@@ -68,19 +69,21 @@ class AAL:
 {str(result_Self | result_Mem)}
 '''
         # set 直接相加是非法操作，应该用并集运算
-        answer = llm_ask(promote)
+        answer = llm_ask(promote, mode='high')
 
         data = json.loads(answer.strip())
         if(len(data) == 0):
             print('Error: Mem-Compression Failed.')
             return 'Error'
-        
+        # return data[0]['content']
+        # 这部分没有更好。
         promote = f'''
 你是一个信息处理机器，请用给出文本对问题给予回复(日常聊天对话也被视为问题)。
 当给出文本的内容不足以支撑对问题的回复时，允许自由发挥。
 一切目标以“人类回复”为主，不必应用给出的全部文本信息，其仅作为“我”这个人对相关内容的思考和认识的参考。
 注意，根据问题严肃程度，请自行决定透露信息量和输出文本长度。不建议贸然对短文本给予大量信息和长回复。
 注意，自由发挥部分不得严重偏离“我”可能的基本形象。即，不得上下矛盾，包括但不限于性格矛盾、逻辑矛盾等。
+特别注意，你的目标是以人类的态度回答问题，重点在于回答问题，而非毫无保留的提供一切数据。你的回复必须切题。
 要求回复必须以严格JSON格式输出，不得包含其他内容。
 示例：
 Q:你会控制你喜欢的人吗？你觉得你是一个很自私的人吗，未来满足去控制对方？
@@ -92,7 +95,7 @@ A:
 本次任务文本：
 {data[0]['content']}
 '''
-        answer = llm_ask(promote)
+        answer = llm_ask(promote, mode='high')
 
         data = json.loads(answer.strip())
         if(len(data) == 0):
@@ -111,13 +114,15 @@ A:
         '''
         # 根据一组对话对其产生问题
         promote = f'''
-你是一个自我建模机器，请对如下文字做分析，对文本提出多条关于“我”(文字撰写者)的问题。
+你是一个自我建模机器，请对如下文字做分析，对文本提出多条关于“我”的问题。
+若输入文本为常规文本材料，默认文本撰写者即“我”；若为连续对话类材料，默认“{'Alice' if me == None else me}”为“我”（自行根据上下文推断指代）
+若提供了发言者，但却只有一条信息，默认按照书信理解。
 自行按内容划分不同提问维度，每个维度只取最重要的问题。且问题数不得超过5条，并以严格的json输出（只输出json，不得输出其他内容）。
 示例：
 [
 {{"content": "你最想/最害怕在自我认知上发现或承认的，究竟是什么？"}},
 {{"content": "你的这个“最高准则”具体包含哪些核心信念或禁忌，它如何指导你在感情与生活中的决断？"}},
-{{"content": "在爱与占有之间，你如何衡量保护对方和尊重对方自由的界限？"}},
+{{"content": "在爱与占有之间，你如何衡量保护对方和尊重对方自由的界限？"}}
 ]
 本次任务文本：
 {context}
@@ -146,13 +151,13 @@ A:
 回复：
 [
 {{"content": "在自我认知上我最想发现的是：自己的内心一直在翻腾，不会满足、会保持追求。", "weight": 8}},
-{{"content": "在自我认知上我最害怕承认的是：我其实很自私，或者有一天变得心安理得、沉默不前。", "weight": 8}},
+{{"content": "在自我认知上我最害怕承认的是：我其实很自私，或者有一天变得心安理得、沉默不前。", "weight": 8}}
 ]
 本次任务文本：
 {context}
 '''
             answer = llm_ask(promote)
-            print(answer)
+            
             data2 = json.loads(answer.strip())
             if(len(data2) == 0):
                 print('Error: Self-Modeling Answer Failed.')
@@ -180,7 +185,7 @@ A:
 示例：
 [
 {{"content": "昨天我写了一封卑鄙的信，并认为银河因此伤心，我为此感到后悔并承认错误。", "weight": 9}},
-{{"content": "我强调自己“还不算太笨、还能干很多事”，这是我在表述依赖与求助时保留的自我能力认知。", "weight": 5}},
+{{"content": "我强调自己“还不算太笨、还能干很多事”，这是我在表述依赖与求助时保留的自我能力认知。", "weight": 5}}
 ]
 预先提供数据：
 {cognition}
