@@ -35,7 +35,7 @@ class AAL:
         data = json.loads(answer.strip())
         if(len(data) == 0):
             print('Error: Ask-Question Split Failed.')
-            return
+            return 'Error'
         result_Self = []
         result_Mem = []
         # [
@@ -52,8 +52,53 @@ class AAL:
                 result_Mem += [i[0]['content'] for i in x if i[0] is not None]
         result_Self = set(result_Self)
         result_Mem = set(result_Mem)
-        print(result_Mem)
-        print(result_Self)
+        promote = f'''
+你是一个记忆压缩机器，请根据问题自行考虑各种信息对问题的重要程度。
+你需要将给出的文本精炼为只对回答特定问题重要一段文字。
+要求该段文字以客观的语言(使用第一人称代词“我”)和角度表述内容，并且要求自行按需保留原文本所流露出的情感。
+要求以描述性的语句回答，简短精要，尽量不适用复杂华丽的修饰，要求以白话形式描述，而非文学语言。
+并且要求答案有依据可查，不得包含源文本外的虚构内容，允许部分润色，但不允许造假。
+要求回复必须以严格JSON格式输出，不得包含其他内容。
+示例：
+[
+{{"content": "我依赖对方获取安全感，但这种依赖导致他人反感，让我自我怀疑。我渴望被认可却不确定自身价值，反复在情感依赖与自我否定间挣扎，既想承认自私又害怕被否定，这种矛盾让我在悔恨与行动中反复循环。"}}
+]
+问题：{context}
+本次目标文本：
+{str(result_Self | result_Mem)}
+'''
+        # set 直接相加是非法操作，应该用并集运算
+        answer = llm_ask(promote)
+
+        data = json.loads(answer.strip())
+        if(len(data) == 0):
+            print('Error: Mem-Compression Failed.')
+            return 'Error'
+        
+        promote = f'''
+你是一个信息处理机器，请用给出文本对问题给予回复(日常聊天对话也被视为问题)。
+当给出文本的内容不足以支撑对问题的回复时，允许自由发挥。
+一切目标以“人类回复”为主，不必应用给出的全部文本信息，其仅作为“我”这个人对相关内容的思考和认识的参考。
+注意，根据问题严肃程度，请自行决定透露信息量和输出文本长度。不建议贸然对短文本给予大量信息和长回复。
+注意，自由发挥部分不得严重偏离“我”可能的基本形象。即，不得上下矛盾，包括但不限于性格矛盾、逻辑矛盾等。
+要求回复必须以严格JSON格式输出，不得包含其他内容。
+示例：
+Q:你会控制你喜欢的人吗？你觉得你是一个很自私的人吗，未来满足去控制对方？
+A:
+[
+{{"content": "我有时候会依赖对方，但更多是想要安全感，不是想去控制。也许看起来有点自私，但我并不想剥夺对方的自由。"}}
+]
+本次问题：{context}
+本次任务文本：
+{data[0]['content']}
+'''
+        answer = llm_ask(promote)
+
+        data = json.loads(answer.strip())
+        if(len(data) == 0):
+            print('Error: Humanization Failed.')
+            return 'Error'
+        return data[0]['content']
 
 
     def selfModeling(self, context, me=None):
@@ -155,7 +200,7 @@ class AAL:
             self.MemDB.add(llm_embedding(item['content']), item)
 
 
-core = AAL()
+# core = AAL()
 # core.selfModeling(
 # '''
 # 银河：
@@ -171,4 +216,4 @@ core = AAL()
 # 算了，不多说。我只求你告诉我，我到底能不能得到你。我还不算太笨，还能干好多事情。你告诉我怎么办吧
 # '''
 # )
-core.ask("你会控制你喜欢的人吗？你觉得你是一个很自私的人吗，未来满足去控制对方？")
+# core.ask("你会控制你喜欢的人吗？你觉得你是一个很自私的人吗，未来满足去控制对方？")
