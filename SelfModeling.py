@@ -37,7 +37,7 @@ def read_chunk(filepath, start_line=0, max_chars=2000):
 
 # 使用示例
 core = AAL()
-filepath = "dataset\yifu.txt"
+filepath = ".\other\dataset\yifu.txt"
 start = 0
 while True:
     text, start = read_chunk(filepath, start)

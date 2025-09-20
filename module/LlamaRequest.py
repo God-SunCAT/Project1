@@ -36,7 +36,7 @@ def llm_ask_high(message, hideThinking=True, model="glm-4.5", temperature=0.6, a
     x = data['choices'][0]['message']['content']
     logging.info(f'''
 ----
-<llm_ask>
+<llm_ask_high>
 QUESTION:
 {message}
 ANSWER:
@@ -76,7 +76,7 @@ def llm_ask_low(message, hideThinking=True, model="qwen3:8b-q4_K_M"):
 
     logging.info(f'''
 ----
-<llm_ask>
+<llm_ask_low>
 QUESTION:
 {message}
 ANSWER:
