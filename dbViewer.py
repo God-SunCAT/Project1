@@ -9,7 +9,8 @@ import os
 # ========================
 db_options = {
     "SelfModeling_VectorDB": "./db/SelfModeling_VectorDB",
-    "Memory_VectorDB": "./db/Memory_VectorDB"
+    "Memory_VectorDB": "./db/Memory_VectorDB",
+    "CompressionMemory_VectorDB": "./db/CompressionMemory_VectorDB"
 }
 
 st.title("🧩 SimpleVectorDB 可视化查看器")

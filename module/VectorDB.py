@@ -86,6 +86,9 @@ class SimpleVectorDB:
         else:
             results = list(zip(labels_list, distances_list))
         return results
+    
+    def query_by_id(self, id):
+        return self.data_store.get(id, None)
 
     def _maybe_persist(self):
         if self.persist_path:

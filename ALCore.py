@@ -7,7 +7,9 @@ from module.LlamaRequest import llm_ask, llm_embedding
 class AAL:
     def __init__(self):
         self.SelfDB = SimpleVectorDB(1024, 10000, "./db/SelfModeling_VectorDB")
-        self.MemDB = SimpleVectorDB(1024, 10000, "./db/Memory_VectorDB")
+        self.MemDB = SimpleVectorDB(1024, 10000, "./db/DetailMemory_VectorDB")
+        self.ComMemDB = SimpleVectorDB(1024, 10000, "./db/CompressionMemory_VectorDB")
+
     
     def ask(self, message):
         # Question-Split
@@ -21,20 +23,35 @@ class AAL:
         # VectorDB-Query
         result_Self = []
         result_Mem = []
+        result_list = []
         # [({'content': 'bbb', 'ida': 3, 'pica': 1}, 0.2449)]
+        FNodes = []
         for item in data:
             if('self' in item):
                 x = self.SelfDB.query(llm_embedding(item['self']))
-                result_Self += [i[0]['content'] for i in x if i[0] is not None]
+                FNodes += [i[0]['fnode'] for i in x if i[0] is not None]
+                result_Self += [(i[0]['content'], i[0]['fnode']) for i in x if i[0] is not None]
             elif('mem' in item):
                 x = self.MemDB.query(llm_embedding(item['mem']))
-                result_Mem += [i[0]['content'] for i in x if i[0] is not None]
+                FNodes += [i[0]['fnode'] for i in x if i[0] is not None]
+                result_Mem += [(i[0]['content'], i[0]['fnode']) for i in x if i[0] is not None]
         result_Self = set(result_Self)
         result_Mem = set(result_Mem)
+        result = result_Self | result_Mem
+        # 直接构建依赖列表
+        # [{'node': 1, 'mem': '', 'detail': []}]
+        FNodes = set(FNodes)
+        for i in FNodes:
+            detail = []
+            for text, node in result:
+                if node == i:
+                    detail.append(text)
+            result_list.append({'mem': self.ComMemDB.query_by_id(i)['content'], 'detail': detail})
+            
 
         # Mem-Refine
         # set 直接相加是非法操作，应该用并集运算
-        answer = llm_ask(pmt_ASK_MemRefine.format(question=message, context=str(result_Self | result_Mem)), mode='high')
+        answer = llm_ask(pmt_ASK_MemRefine.format(question=message, context=str(result_list)), mode='high')
 
         data = json.loads(answer.strip())
         if(len(data) == 0):
@@ -59,6 +76,14 @@ class AAL:
             2.分别回答这些问题
             3.写入向量数据库
         '''
+        # Compression 先完成对概括类记忆的构建
+        answer = llm_ask(pmt_MEM_Compression.format(person={'Alice' if me == None else me}, context=message))
+        data = json.loads(answer.strip())
+        if(len(data) == 0):
+            print('Error: Make-CompressionMemory Failed.')
+            return
+        
+        FNode = self.ComMemDB.add(llm_embedding(data[0]['content']), data[0])
         # Question
         answer = llm_ask(pmt_SM_Question.format(person={'Alice' if me == None else me}, context=message))
         # Answer
@@ -82,6 +107,7 @@ class AAL:
                 if(not 'content' in item or not 'weight' in item):
                     return
                 cognition += str(item) + "\n"
+                item['fnode'] = FNode
                 self.SelfDB.add(llm_embedding(item['content']), item)
                 
         # 事件记忆建模
@@ -95,6 +121,7 @@ class AAL:
         for item in data:
             if(not 'content' in item or not 'weight' in item):
                 return
+            item['fnode'] = FNode
             self.MemDB.add(llm_embedding(item['content']), item)
 
 
