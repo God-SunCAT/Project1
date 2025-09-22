@@ -1,5 +1,5 @@
+from sklearn.cluster import KMeans
 from module.LlamaRequest import llm_ask
-
 def llm(message, mode='low'):
     # LLM封装
     return llm_ask(message, mode)
@@ -37,8 +37,31 @@ class NLPN:
         示例：
             在认知系统中，AuxiliaryData即为记忆数据，SourceData为初级认知数据
             记忆与认知是不可分的，可以一次性传入全部可能有关联的数据，即相同时间步产生的数据
+        
+        AuxiliaryData -> (text-list, embedding-list) -> Tag 0
+        SourceData -> (text-list, embedding-list)    -> Tag 1
+        
         '''
-        pass
+        # 完成数据组合，以便完成K-Means
+        # [[text], [embedding], [tag]]
+        mixData = [
+            AuxiliaryData[0] + SourceData[0],
+            AuxiliaryData[1] + SourceData[1],
+            [0] * len(AuxiliaryData[0]) + [1] * len(SourceData[0])
+        ]
+        # 确定聚类数量，每类约15个数据
+        numClusters = int(len(mixData[0]) / 15)
+        if numClusters == 0:
+            # 这里可以优化，但在逻辑正常的情况下不会进入该过程，则就这样吧
+            numClusters = 1
+        # K-Means
+        kmeans = KMeans(n_clusters=numClusters, random_state=42, n_init=12)
+        # 聚类数据分类
+        # [(text, embedding, type)]
+        classifiedData = [[] * numClusters]
+        for idx, label in enumerate(kmeans.labels_):
+            classifiedData[label] += [(mixData[0][idx], mixData[1][idx], mixData[2][idx])]
+        return classifiedData
     
     def hiddenLayer(self, data):
         '''
@@ -66,3 +89,6 @@ class NLPN:
     def postLayer(self, data):
         # 该架构中，postLayer已经无用。
         pass
+
+core = NLPN()
+core.inputLayer((['ABC'], [[1,2,3,4]]), (['def'], [[1,2,2,4]]))
