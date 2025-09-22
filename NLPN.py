@@ -69,6 +69,8 @@ class NLPN:
         作用：
             通过NLP算子(LLM)，完成一级信息压缩，并实现聚类
             (聚类完毕后由外部调用将其传入下一层HiddenLayer或OutputLayer)
+        
+        这里的核心其实是prompt的编写
         '''
         pass
 
