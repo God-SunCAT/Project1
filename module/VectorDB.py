@@ -82,7 +82,7 @@ class SimpleVectorDB:
         distances_list = distances[0].tolist()
 
         if return_data:
-            results = [(self.data_store.get(l, None), d) for l, d in zip(labels_list, distances_list)]
+            results = [(self.data_store.get(l, None), l, d) for l, d in zip(labels_list, distances_list)]
         else:
             results = list(zip(labels_list, distances_list))
         return results

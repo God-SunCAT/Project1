@@ -67,13 +67,13 @@ class NLPN:
             classifiedData[label] += [(mixData[0][idx], mixData[2][idx])]
         return classifiedData
     
-    def hiddenLayer(self, classifiedData):
+    def hiddenLayer(self, classifiedData, aimNum):
         '''
         目的：完成一级信息压缩
         作用：
             通过NLP算子(LLM)，完成一级信息压缩，并实现聚类
             (聚类完毕后由外部调用将其传入下一层HiddenLayer或OutputLayer)
-        
+        返回值：当衰减完毕时 [text, ...] | 当未衰减完毕时 classifiedData[idx] -> (text, type)
         这里的核心其实是prompt的编写
         '''
         # data -> [(text, type), ...]
@@ -88,6 +88,12 @@ class NLPN:
             tempData = json.loads(response)
             if(len(tempData) != 0):
                 output += [d['content'] for d in tempData]
+
+        # 判定数据量是否衰减到目标范围内
+        # aimNue为-1时不进行结束检验，为0时直接输出output
+        if((len(output) <= aimNum and aimNum != -1) or aimNum == 0):
+            # 区分结束输出与中间输出可判断第一项数据类型
+            return output
 
         embeddings = []
         for text in output:
@@ -105,12 +111,13 @@ class NLPN:
         # classifiedData[label] -> [(text, type), ...]
         classifiedData = [[] for _ in range(numClusters)]
         for idx, label in enumerate(kmeans.labels_):
-            classifiedData[label] += [(output[idx], embeddings[idx])]  
+            # tag-1 -> SourceData
+            classifiedData[label] += [(output[idx], 1)]
         return classifiedData
             
         
 
-    def outputLayer(self, sameLevelData, data, vectorDB):
+    def outputLayer(self, hiddenData, vectorDB):
         '''
         目的：
         作用：
@@ -119,9 +126,19 @@ class NLPN:
                     毕竟对于对话或者小说这种时序数据来说，无论多细微的数据都是有关联的
             2.(本次数据 + Top-3)实现数据互补及更新，即以本次数据为主对原始数据进行更新。
                 并由NLP算子决定是否增加记录以及是否删改原始记录，构造操作表
-            3.本次数据进行互相Top-k，同样向量查询Top-3进行数据互补，然后依据操作表删改数据
+            3.本次数据进行互相Top-k，同样向量查询Top-3进行数据互补(同次同级数据互补没必要)，然后依据操作表删改数据
         注：这里已经是高维数据了，没有必要再次使用K-Means聚类。
         '''
+        # 搜寻Top-k并聚类，传入hiddenLayer复用
+        topK = 3
+        classifiedData = [[] for _ in range(len(hiddenData))]
+        for idx, text in enumerate(hiddenData):
+            # 要求vectorDB数据以{'content': '', ...}格式存储
+            x = vectorDB.query(llm_embedding(text), topK)
+            classifiedData[idx] += [text] + [i[0]['content'] for i in x]
+        # 目前Top-k聚类完毕，接下来需要完成数据融合以及对删改的实现
+
+
         pass
 
     def postLayer(self, data):
