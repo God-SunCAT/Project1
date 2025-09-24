@@ -55,7 +55,7 @@ class SimpleVectorDB:
         self.id_map.add(id)
 
         if data is not None:
-            self.data_store[id] = data
+            self.data_store[id] = (vector, data)
 
         self._maybe_persist()
         return id
@@ -82,13 +82,13 @@ class SimpleVectorDB:
         distances_list = distances[0].tolist()
 
         if return_data:
-            results = [(self.data_store.get(l, None), l, d) for l, d in zip(labels_list, distances_list)]
+            results = [(self.data_store.get(l, None)[1], l, d) for l, d in zip(labels_list, distances_list)]
         else:
             results = list(zip(labels_list, distances_list))
         return results
     
-    def query_by_id(self, id):
-        return self.data_store.get(id, None)
+    def query_by_id(self, id, outputVector=False):
+        return self.data_store.get(id, None) if outputVector == True else self.data_store.get(id, None)[1]
 
     def _maybe_persist(self):
         if self.persist_path:

@@ -30,7 +30,19 @@ class NLPN:
     '''
     def __init__(self):
         pass
-
+    
+    def Modeling(self, AuxiliaryData, SourceData, VectorDB):
+        n = len(AuxiliaryData) + len(SourceData)
+        # 最多加深层数不超过4
+        numLayer = 4
+        mid = self.inputLayer(AuxiliaryData, SourceData)
+        for i in range(numLayer):
+            # 抽象等级0.4
+            mid = self.hiddenLayer(mid, int(n * 0.4) if i != numLayer - 1 else 0)
+            if(isinstance(mid[0], str)):
+                break
+        self.outputLayer(mid, VectorDB)
+        
     def inputLayer(self, AuxiliaryData, SourceData):
         '''
         目的：完成预处理实现辅助数据与源数据混合，以便更好完成任务

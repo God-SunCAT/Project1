@@ -1,4 +1,6 @@
 import json
+import os
+import pickle
 from module.Prompts import *
 from module.VectorDB import SimpleVectorDB
 from module.LlamaRequest import llm_ask, llm_embedding
@@ -7,9 +9,15 @@ from module.LlamaRequest import llm_ask, llm_embedding
 class AAL:
     def __init__(self):
         self.SelfDB = SimpleVectorDB(1024, 10000, "./db/SelfModeling_VectorDB")
+        self.CogDB = SimpleVectorDB(1024, 10000, "./db/Cognition_VectorDB")
         self.MemDB = SimpleVectorDB(1024, 10000, "./db/DetailMemory_VectorDB")
         self.ComMemDB = SimpleVectorDB(1024, 10000, "./db/CompressionMemory_VectorDB")
 
+        if os.path.exists('./data.pkl'):
+            with open('./data.pkl', "rb") as f:
+                self.conf = pickle.load(f)
+        else:
+            self.conf = {'Self': 0, 'Mem': 0}
     
     def ask(self, message):
         # Question-Split
@@ -23,14 +31,19 @@ class AAL:
         # VectorDB-Query
         result_Self = []
         result_Mem = []
+        result_Cog = []
         result_list = []
         # [({'content': 'bbb', 'ida': 3, 'pica': 1}, 0.2449)]
         FNodes = []
         for item in data:
             if('self' in item):
+                # Self-Modeling数据库
                 x = self.SelfDB.query(llm_embedding(item['self']))
                 FNodes += [i[0]['fnode'] for i in x if i[0] is not None]
                 result_Self += [(i[0]['content'], i[0]['fnode']) for i in x if i[0] is not None]
+                # 提问同样适用于Cog数据库
+                x = self.CogDB.query(llm_embedding(item['self']))
+                result_Cog += [i['content'] for i in x]
             elif('mem' in item):
                 x = self.MemDB.query(llm_embedding(item['mem']))
                 FNodes += [i[0]['fnode'] for i in x if i[0] is not None]
@@ -47,7 +60,7 @@ class AAL:
                 if node == i:
                     detail.append(text)
             result_list.append({'mem': self.ComMemDB.query_by_id(i)['content'], 'detail': detail})
-            
+        result_list.append({'cog': result_Cog})
 
         # Mem-Refine
         # set 直接相加是非法操作，应该用并集运算
@@ -108,7 +121,7 @@ class AAL:
                     return
                 cognition += str(item) + "\n"
                 item['fnode'] = FNode
-                self.SelfDB.add(llm_embedding(item['content']), item)
+                lastIDSelf = self.SelfDB.add(llm_embedding(item['content']), item)
                 
         # 事件记忆建模
         answer = llm_ask(pmt_MEM_Modeling.format(person={'Alice' if me == None else me}, cognition=cognition, context=message))
@@ -122,7 +135,14 @@ class AAL:
             if(not 'content' in item or not 'weight' in item):
                 return
             item['fnode'] = FNode
-            self.MemDB.add(llm_embedding(item['content']), item)
+            lastIDMem = self.MemDB.add(llm_embedding(item['content']), item)
+
+        n = 10
+        if(lastIDSelf - self.conf['Self'] >= n):
+            # 懒得做了，歇会
+            # 现在需要传入NLPN Modeling
+            # 多库独立
+            
 
 
 # core = AAL()
