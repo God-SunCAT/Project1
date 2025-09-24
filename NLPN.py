@@ -149,7 +149,7 @@ class NLPN:
             3.本次数据进行互相Top-k，同样向量查询Top-3进行数据互补(同次同级数据互补没必要)，然后依据操作表删改数据
         注：这里已经是高维数据了，没有必要再次使用K-Means聚类。
         '''
-        # 搜寻Top-k并聚类，传入hiddenLayer复用
+        # 搜寻Top-k并聚类
         topK = 3
         # 注意：这里的classifiedData[idx]为了完成记录修改，其定义与其他函数中不同
         # classifiedData[idx] -> [(text, tag, id)]
@@ -163,13 +163,15 @@ class NLPN:
             response = llm_ask(pmt_outputLayer.format(context=str(data)),mode='high')
             tempData = json.loads(response)
             if(len(tempData) == 0):
-                return
+                # 这附近绝对有问题！！！
+                # 这个循环只走了一遍。
+                continue
             for d in tempData:
                 # {"operation": 0, "content": "增加记录", id: 0}
                 match d['operation']:
                     case 0:
                         # 增加记录
-                        lastID = vectorDB.add(llm_embedding(d['content']), {'content': d['content'], 'FNode': -1})
+                        lastID = vectorDB.add(llm_embedding(d['content']), {'content': d['content'], 'weight': 10, 'fnode': -1})
                     case 1:
                         # 删除记录
                         vectorDB.remove(d['id'])

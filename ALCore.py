@@ -146,12 +146,17 @@ class AAL:
             # 读取最新的Self数据和Mem数据，并完成格式化
             # AuxiliaryData -> (text-list, embedding-list)
             # SourceData -> (text-list, embedding-list)
-            
+            logging.info(
+                '----\n'
+                '<NLPN-SelfModeling>\n'
+                f'[{self.conf.get("Self", 0) + 1}, {lastIDSelf}]\n'
+                '----\n'
+            )
             # 构造AuxiliaryData
             texts = []
             embeddings = []
-            for i in range(self.conf['Self'] + 1, lastIDSelf + 1, 1):
-                x = self.SelfDB.query_by_id(i, True)
+            for i in range(self.conf['Mem'] + 1, lastIDMem + 1, 1):
+                x = self.MemDB.query_by_id(i, True)
                 texts.append(x[1]['content'])
                 embeddings.append(x[0])
             aux = (texts[:], embeddings[:])
@@ -165,17 +170,12 @@ class AAL:
                 embeddings.append(x[0])
             source = (texts[:], embeddings[:])
             lastID = self.net.Modeling(aux, source, self.SelfDB)
-            
-            self.conf['Self'] = lastID
 
+            self.conf['Self'] = lastID
+            self.conf['Mem'] = lastIDMem
             with open("./data.pkl", "wb") as f:  # wb = write binary
                 pickle.dump(self.conf, f)
 
-            logging.info(
-                '----\n'
-                '<NLPN-SelfModeling>\n'
-                f'[{self.conf['Self'] + 1}, {lastIDSelf}]'
-            )
 
             
             
