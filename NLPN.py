@@ -27,11 +27,16 @@ class NLPN:
         在此，我选择将LLM作为中间层，以测试将信息抽象上升一个维度会是怎样的结果。
     需要注意的是，这里不是无意义的信息压缩，而是使用数量换取密度信息压缩。
     其在少量信息的情况下一定是无效甚至有负面影响的。
+
+    注：本类可作单例类使用，因为其无共享数据
     '''
     def __init__(self):
         pass
     
     def Modeling(self, AuxiliaryData, SourceData, VectorDB):
+        '''
+        返回值:最新添加ID
+        '''
         n = len(AuxiliaryData) + len(SourceData)
         # 最多加深层数不超过4
         numLayer = 4
@@ -41,7 +46,7 @@ class NLPN:
             mid = self.hiddenLayer(mid, int(n * 0.4) if i != numLayer - 1 else 0)
             if(isinstance(mid[0], str)):
                 break
-        self.outputLayer(mid, VectorDB)
+        return self.outputLayer(mid, VectorDB)
         
     def inputLayer(self, AuxiliaryData, SourceData):
         '''
@@ -157,18 +162,18 @@ class NLPN:
         for data in classifiedData:
             response = llm_ask(pmt_outputLayer.format(context=str(data)),mode='high')
             tempData = json.loads(response)
-            if(len(tempData) != 0):
+            if(len(tempData) == 0):
                 return
             for d in tempData:
                 # {"operation": 0, "content": "增加记录", id: 0}
                 match d['operation']:
                     case 0:
                         # 增加记录
-                        vectorDB.add(llm_embedding(d['content']), {'content': d['content']})
+                        lastID = vectorDB.add(llm_embedding(d['content']), {'content': d['content'], 'FNode': -1})
                     case 1:
                         # 删除记录
                         vectorDB.remove(d['id'])
-        return
+        return lastID
 
     def postLayer(self, data):
         # 该架构中，postLayer已经无用。

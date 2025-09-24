@@ -1,6 +1,8 @@
 import json
 import os
 import pickle
+import logging
+from NLPN import NLPN
 from module.Prompts import *
 from module.VectorDB import SimpleVectorDB
 from module.LlamaRequest import llm_ask, llm_embedding
@@ -8,8 +10,8 @@ from module.LlamaRequest import llm_ask, llm_embedding
 # 注意，标准的json最后一项没有 , 并且，只使用"
 class AAL:
     def __init__(self):
+        self.net = NLPN()
         self.SelfDB = SimpleVectorDB(1024, 10000, "./db/SelfModeling_VectorDB")
-        self.CogDB = SimpleVectorDB(1024, 10000, "./db/Cognition_VectorDB")
         self.MemDB = SimpleVectorDB(1024, 10000, "./db/DetailMemory_VectorDB")
         self.ComMemDB = SimpleVectorDB(1024, 10000, "./db/CompressionMemory_VectorDB")
 
@@ -17,9 +19,11 @@ class AAL:
             with open('./data.pkl', "rb") as f:
                 self.conf = pickle.load(f)
         else:
+            # 其ID表示已读的最后一条
             self.conf = {'Self': 0, 'Mem': 0}
     
     def ask(self, message):
+        # 注:FNode = -1时会被忽略
         # Question-Split
         answer = llm_ask(pmt_ASK_QuestionSplit.format(context=message))
 
@@ -41,9 +45,6 @@ class AAL:
                 x = self.SelfDB.query(llm_embedding(item['self']))
                 FNodes += [i[0]['fnode'] for i in x if i[0] is not None]
                 result_Self += [(i[0]['content'], i[0]['fnode']) for i in x if i[0] is not None]
-                # 提问同样适用于Cog数据库
-                x = self.CogDB.query(llm_embedding(item['self']))
-                result_Cog += [i['content'] for i in x]
             elif('mem' in item):
                 x = self.MemDB.query(llm_embedding(item['mem']))
                 FNodes += [i[0]['fnode'] for i in x if i[0] is not None]
@@ -55,6 +56,8 @@ class AAL:
         # [{'node': 1, 'mem': '', 'detail': []}]
         FNodes = set(FNodes)
         for i in FNodes:
+            if(i == -1):
+                continue
             detail = []
             for text, node in result:
                 if node == i:
@@ -137,11 +140,44 @@ class AAL:
             item['fnode'] = FNode
             lastIDMem = self.MemDB.add(llm_embedding(item['content']), item)
 
+
         n = 10
         if(lastIDSelf - self.conf['Self'] >= n):
-            # 懒得做了，歇会
-            # 现在需要传入NLPN Modeling
-            # 多库独立
+            # 读取最新的Self数据和Mem数据，并完成格式化
+            # AuxiliaryData -> (text-list, embedding-list)
+            # SourceData -> (text-list, embedding-list)
+            
+            # 构造AuxiliaryData
+            texts = []
+            embeddings = []
+            for i in range(self.conf['Self'] + 1, lastIDSelf + 1, 1):
+                x = self.SelfDB.query_by_id(i, True)
+                texts.append(x[1]['content'])
+                embeddings.append(x[0])
+            aux = (texts[:], embeddings[:])
+
+            # 构造SourceData
+            texts = []
+            embeddings = []
+            for i in range(self.conf['Self'] + 1, lastIDSelf + 1, 1):
+                x = self.SelfDB.query_by_id(i, True)
+                texts.append(x[1]['content'])
+                embeddings.append(x[0])
+            source = (texts[:], embeddings[:])
+            lastID = self.net.Modeling(aux, source, self.SelfDB)
+            
+            self.conf['Self'] = lastID
+
+            with open("./data.pkl", "wb") as f:  # wb = write binary
+                pickle.dump(self.conf, f)
+
+            logging.info(
+                '----\n'
+                '<NLPN-SelfModeling>\n'
+                f'[{self.conf['Self'] + 1}, {lastIDSelf}]'
+            )
+
+            
             
 
 

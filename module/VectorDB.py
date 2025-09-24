@@ -88,6 +88,10 @@ class SimpleVectorDB:
         return results
     
     def query_by_id(self, id, outputVector=False):
+        '''
+        outPutVector -> True
+        (embedding, rawData)
+        '''
         return self.data_store.get(id, None) if outputVector == True else self.data_store.get(id, None)[1]
 
     def _maybe_persist(self):
