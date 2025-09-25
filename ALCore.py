@@ -140,7 +140,7 @@ class AAL:
             item['fnode'] = FNode
             lastIDMem = self.MemDB.add(llm_embedding(item['content']), item)
 
-
+        # NLPN
         n = 10
         if(lastIDSelf - self.conf['Self'] >= n):
             # 读取最新的Self数据和Mem数据，并完成格式化

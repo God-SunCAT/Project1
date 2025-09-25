@@ -1,4 +1,5 @@
 import json
+import logging
 from sklearn.cluster import KMeans
 from module.LlamaRequest import llm_ask, llm_embedding
 from module.NLPNPrompts import *
@@ -37,13 +38,16 @@ class NLPN:
         '''
         返回值:最新添加ID
         '''
-        n = len(AuxiliaryData) + len(SourceData)
+        n = len(AuxiliaryData[0]) + len(SourceData[0])
+        logging.info(f'NLPN:Modeling:raw:{n}')
         # 最多加深层数不超过4
         numLayer = 4
         mid = self.inputLayer(AuxiliaryData, SourceData)
         for i in range(numLayer):
             # 抽象等级0.4
-            mid = self.hiddenLayer(mid, int(n * 0.4) if i != numLayer - 1 else 0)
+            mid = self.hiddenLayer(mid, int(n * 0.4) if i != numLayer - 1 else 0, str(i))
+            num = [len(x) for x in (y for y in mid)]
+            logging.info(f'NLPN:Modeling:Result:Layer:{i}:Num:{sum(num)}')
             if(isinstance(mid[0], str)):
                 break
         return self.outputLayer(mid, VectorDB)
@@ -85,7 +89,7 @@ class NLPN:
             classifiedData[label] += [(mixData[0][idx], mixData[2][idx])]
         return classifiedData
     
-    def hiddenLayer(self, classifiedData, aimNum):
+    def hiddenLayer(self, classifiedData, aimNum, layer='<unk>'):
         '''
         输入：aimNue为-1时不进行结束检验，为0时直接输出output
         目的：完成一级信息压缩
@@ -103,7 +107,7 @@ class NLPN:
         # ]
         output = []
         for data in classifiedData:
-            response = llm_ask(pmt_hiddenLayer.format(context=str(data)),mode='high')
+            response = llm_ask(pmt_hiddenLayer.format(context=str(data)),mode='high', remark='HiddenLayer:' + layer)
             tempData = json.loads(response)
             if(len(tempData) != 0):
                 output += [d['content'] for d in tempData]
@@ -160,7 +164,7 @@ class NLPN:
             classifiedData[idx] += [(text, 1, 0)] + [(i[0]['content'], 0, i[1]) for i in x]
         # 目前Top-k聚类完毕，接下来需要完成数据融合以及对删改的实现
         for data in classifiedData:
-            response = llm_ask(pmt_outputLayer.format(context=str(data)),mode='high')
+            response = llm_ask(pmt_outputLayer.format(context=str(data)),mode='high', remark='OutputLayer')
             tempData = json.loads(response)
             if(len(tempData) == 0):
                 # 这附近绝对有问题！！！

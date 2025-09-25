@@ -34,16 +34,6 @@ def llm_ask_high(message, hideThinking=True, model="glm-4.5", temperature=0.6, a
 
     data = response.json()
     x = data['choices'][0]['message']['content']
-    logging.info(f'''
-----
-<llm_ask_high>
-QUESTION:
-{message}
-ANSWER:
-{x}
-----
-''')
-
     return x
 
 
@@ -73,24 +63,27 @@ def llm_ask_low(message, hideThinking=True, model="qwen3:8b-q4_K_M"):
             x2 = ''.join(x2[1:])
         else:
             x2 = x2[0]
-
-    logging.info(f'''
-----
-<llm_ask_low>
-QUESTION:
-{message}
-ANSWER:
-{x}
-----
-''')
-    
     return x2
 
-def llm_ask(message, mode='low'):
+def llm_ask(message, mode='low', remark=None):
     if mode == 'low':
-        return llm_ask_low(message)
+        x = llm_ask_low(message)
     else:
-        return llm_ask_high(message)
+        x = llm_ask_high(message)
+    
+    remark_ = 'Remark:' + remark + '\n' if remark != None else ''
+    logging.info(
+        '----\n'
+        f'{"<llm_ask_low>" if mode == "low" else "<llm_ask_high>"}\n'
+        f'{remark_}'
+        'Question:\n'
+        f'{message}\n'
+        'Answer:\n'
+        f'{x}\n'
+        '----\n'
+    )
+    
+    return x
 
 def llm_embedding(text, model="bge-m3-cpu"):
     """
