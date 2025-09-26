@@ -1,6 +1,7 @@
 import logging
 import requests
 import json
+import os
 
 logging.basicConfig(
     level=logging.INFO,
@@ -9,11 +10,14 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s -\n%(message)s"
 )
 
-def llm_ask_high(message, hideThinking=True, model="glm-4.5", temperature=0.6, api_key="7287323292074e6789745bdd7678918b.lLUMo3A2EEiSV4Tp"):
+def llm_ask_high(message, hideThinking=True, model="glm-4.5", temperature=0.6, api_key="<api-key>"):
     """
     向智谱AI接口发送请求，只需要提供 message。
     返回完整回复字符串。
     """
+    if(api_key == '<api-key>'):
+        api_key = os.getenv('BIGMODEL_KEY')
+
     url = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 
     headers = {
