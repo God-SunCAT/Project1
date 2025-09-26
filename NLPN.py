@@ -46,7 +46,7 @@ class NLPN:
         for i in range(numLayer):
             # 抽象等级0.4
             mid = self.hiddenLayer(mid, int(n * 0.4) if i != numLayer - 1 else 0, str(i))
-            num = [len(x) for x in (y for y in mid)]
+            num = [len(x) for x in mid]
             logging.info(f'NLPN:Modeling:Result:Layer:{i}:Num:{sum(num)}')
             if(isinstance(mid[0], str)):
                 break
