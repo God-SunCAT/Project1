@@ -9,7 +9,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s -\n%(message)s"
 )
 
-def llm_ask_high(message, hideThinking=True, model="glm-4.5", temperature=0.6, api_key="5bd9da9f9bb84796b4b49ab33a7545bc.yJHCbrOdVnrJVEWf"):
+def llm_ask_high(message, hideThinking=True, model="glm-4.5", temperature=0.6, api_key="7287323292074e6789745bdd7678918b.lLUMo3A2EEiSV4Tp"):
     """
     向智谱AI接口发送请求，只需要提供 message。
     返回完整回复字符串。
