@@ -11,10 +11,13 @@ from module.LlamaRequest import llm_ask, llm_embedding
 class AAL:
     def __init__(self):
         self.net = NLPN()
+
+        # 配置向量数据库
         self.SelfDB = SimpleVectorDB(1024, 10000, "./db/SelfModeling_VectorDB")
         self.MemDB = SimpleVectorDB(1024, 10000, "./db/DetailMemory_VectorDB")
         self.ComMemDB = SimpleVectorDB(1024, 10000, "./db/CompressionMemory_VectorDB")
 
+        # 读取配置数据
         if os.path.exists('./data.pkl'):
             with open('./data.pkl', "rb") as f:
                 self.conf = pickle.load(f)
@@ -24,9 +27,9 @@ class AAL:
     
     def ask(self, message):
         # 注:FNode = -1时会被忽略
-        # Question-Split
-        answer = llm_ask(pmt_ASK_QuestionSplit.format(context=message))
 
+        # Query-Rewriting
+        answer = llm_ask(pmt_ASK_QuestionSplit.format(context=message))
         data = json.loads(answer.strip())
         if(len(data) == 0):
             print('Error: Ask-Question Split Failed.')
@@ -37,7 +40,7 @@ class AAL:
         result_Mem = []
         result_Cog = []
         result_list = []
-        # [({'content': 'bbb', 'ida': 3, 'pica': 1}, 0.2449)]
+
         FNodes = []
         for item in data:
             if('self' in item):
@@ -51,8 +54,10 @@ class AAL:
                 result_Mem += [(i[0]['content'], i[0]['fnode']) for i in x if i[0] is not None]
         result_Self = set(result_Self)
         result_Mem = set(result_Mem)
+        # set 直接相加是非法操作，应该用并集运算
         result = result_Self | result_Mem
-        # 直接构建依赖列表
+
+        # 构建 概括记忆与细节记忆 依赖
         # [{'node': 1, 'mem': '', 'detail': []}]
         FNodes = set(FNodes)
         for i in FNodes:
@@ -63,10 +68,8 @@ class AAL:
                 if node == i:
                     detail.append(text)
             result_list.append({'mem': self.ComMemDB.query_by_id(i)['content'], 'detail': detail})
-        result_list.append({'cog': result_Cog})
 
         # Mem-Refine
-        # set 直接相加是非法操作，应该用并集运算
         answer = llm_ask(pmt_ASK_MemRefine.format(question=message, context=str(result_list)), mode='high')
 
         data = json.loads(answer.strip())
@@ -100,8 +103,10 @@ class AAL:
             return
         
         FNode = self.ComMemDB.add(llm_embedding(data[0]['content']), data[0])
+
         # Question
         answer = llm_ask(pmt_SM_Question.format(person={'Alice' if me == None else me}, context=message))
+        
         # Answer
         data = json.loads(answer.strip())
         if(len(data) == 0):

@@ -4,6 +4,7 @@ from sklearn.cluster import KMeans
 from module.LlamaRequest import llm_ask, llm_embedding
 from module.NLPNPrompts import *
 from module.VectorDB import SimpleVectorDB
+
 def llm(message, mode='low'):
     # LLM封装
     return llm_ask(message, mode)
@@ -17,15 +18,13 @@ class NLPN:
     1.K-Means聚类数量依据每次传入Data数决定，DataNumber/K = 当前NLP算子有效处理数据量
         可以按字数计算，但这里用条数实现即可
     2.传出数据数根据传入数据数决定，
-        当 (HiddenOutput < 0.6 * Input) 时，结束隐藏层计算并传入输出处理层即后处理层
-    注：由于该网络算力消耗极高，所以建议只有当已有数据量达到一定阈值时再触发
+        当 (HiddenOutputNum < level * InputNum) 时，结束隐藏层计算并传入后处理层
+    注：由于该网络计算较慢并要求较多数量的原始数据，所以只有当数据量达到一定阈值才可再触发
 
-    或许每个NLP算子可以同时处理多条数据，以节省算力，
-        不然每条都调用NLP算子，真的很难想象其所需算力级别。
-    不过，我相信，随着技术的发展LLM的算力成本将会无比廉价。
     大语言模型的本质就是不断提高其重要信息召回能力以实现对信息的高度抽象，
-        并基于抽象数据生成结果。而随着LLM的发展，其为自然语言处理提供了新的范式，
-        在此，我选择将LLM作为中间层，以测试将信息抽象上升一个维度会是怎样的结果。
+    并基于抽象数据生成结果。而随着LLM的发展，其为自然语言处理提供了新的范式，
+    在此，我选择将LLM作为中间层，以测试将信息抽象上升一个维度会是怎样的结果。
+
     需要注意的是，这里不是无意义的信息压缩，而是使用数量换取密度信息压缩。
     其在少量信息的情况下一定是无效甚至有负面影响的。
 
@@ -36,20 +35,36 @@ class NLPN:
     
     def Modeling(self, AuxiliaryData, SourceData, VectorDB):
         '''
-        返回值:最新添加ID
+        Args:
+        AuxiliaryData -> (text-list, embedding-list) -> Tag 0
+        SourceData -> (text-list, embedding-list)    -> Tag 1
+        VectorDB -> 数据库操作对象，用于Query、Add、Delete
+
+        Returns:
+        lastID -> 最后一次添加的记录ID，当无被添加的记录时返回 -1
         '''
+        # 计算数据总数
         n = len(AuxiliaryData[0]) + len(SourceData[0])
         logging.info(f'NLPN:Modeling:raw:{n}')
-        # 最多加深层数不超过4
-        numLayer = 4
+
+        # 前处理
         mid = self.inputLayer(AuxiliaryData, SourceData)
+
+        # 隐藏层处理 并配置最多加深层数及结束倍率(aimNum = n * levels)
+        numLayer = 4
+        level = 0.4
         for i in range(numLayer):
-            # 抽象等级0.4
-            mid = self.hiddenLayer(mid, int(n * 0.4) if i != numLayer - 1 else 0, str(i))
+            mid = self.hiddenLayer(mid, int(n * level) if i != numLayer - 1 else 0, str(i))
+
+            # 写日志
             num = [len(x) for x in mid]
             logging.info(f'NLPN:Modeling:Result:Layer:{i}:Num:{sum(num)}')
+            
+            # 结束判断
             if(isinstance(mid[0], str)):
                 break
+        
+        # 后处理
         return self.outputLayer(mid, VectorDB)
         
     def inputLayer(self, AuxiliaryData, SourceData):
@@ -62,28 +77,34 @@ class NLPN:
             在认知系统中，AuxiliaryData即为记忆数据，SourceData为初级认知数据
             记忆与认知是不可分的，可以一次性传入全部可能有关联的数据，即相同时间步产生的数据
         
+        Args:
         AuxiliaryData -> (text-list, embedding-list) -> Tag 0
         SourceData -> (text-list, embedding-list)    -> Tag 1
+
+        Returns:
+        classifiedData -> [[(text, type), ...], ...] K-Means聚类结果
         
         '''
-        # 完成数据组合，以便完成K-Means
-        # [[text], [embedding], [tag]]
+        # 数据组合，以便完成K-Means
+        # mixData -> [[text], [embedding], [tag]]
         mixData = [
             AuxiliaryData[0] + SourceData[0],
             AuxiliaryData[1] + SourceData[1],
             [0] * len(AuxiliaryData[0]) + [1] * len(SourceData[0])
         ]
+
         # 确定聚类数量，每类约15个数据
         numClusters = int(len(mixData[0]) / 15)
         if numClusters == 0:
             # 这里可以优化，但在逻辑正常的情况下不会进入该过程，则就这样吧
             numClusters = 1
+        
         # K-Means
         kmeans = KMeans(n_clusters=numClusters, random_state=42, n_init=12)
         kmeans.fit(mixData[1])
+
         # 聚类数据分类
         # classifiedData[label] -> [(text, type), ...]
-        # 这里预留的embedding传递的可能
         classifiedData = [[] for _ in range(numClusters)]
         for idx, label in enumerate(kmeans.labels_):
             classifiedData[label] += [(mixData[0][idx], mixData[2][idx])]
@@ -91,20 +112,22 @@ class NLPN:
     
     def hiddenLayer(self, classifiedData, aimNum, layer='<unk>'):
         '''
-        输入：aimNue为-1时不进行结束检验，为0时直接输出output
         目的：完成一级信息压缩
         作用：
             通过NLP算子(LLM)，完成一级信息压缩，并实现聚类
             (聚类完毕后由外部调用将其传入下一层HiddenLayer或OutputLayer)
-        返回值：当衰减完毕时 [text, ...] | 当未衰减完毕时 classifiedData[idx] -> (text, type)
-        这里的核心其实是prompt的编写
+
+        Args:
+        classifiedData -> [[(text, type), ...], ...] K-Means聚类结果
+        aimNum -> 目标数量，当本层压缩结果数量小于或等于该值时，会传回原始文本。
+            为 -1 时，不进行结束校验，始终返回classifiedData。为 0 时，返回抽象结果原始文本[text, ...]。
+        layer -> 本级属于第几层HiddenLayer，注释类内容
+
+        Returns:
+        [text, ...] or classifiedData
         '''
+        # 对聚类数据完成抽象化
         # data -> [(text, type), ...]
-        # LLM：
-        # [
-        # {{"content": "输出1"}},
-        # {{"content": "输出2"}}
-        # ]
         output = []
         for data in classifiedData:
             response = llm_ask(pmt_hiddenLayer.format(context=str(data)),mode='high', remark='HiddenLayer:' + layer)
@@ -113,11 +136,11 @@ class NLPN:
                 output += [d['content'] for d in tempData]
 
         # 判定数据量是否衰减到目标范围内
-        # aimNue为-1时不进行结束检验，为0时直接输出output
+        # aimNue为-1时不进行结束检验，为0时直接输出output。区分结束输出与中间输出可判断第一项数据类型。
         if((len(output) <= aimNum and aimNum != -1) or aimNum == 0):
-            # 区分结束输出与中间输出可判断第一项数据类型
             return output
 
+        # 生成文本向量
         embeddings = []
         for text in output:
             embeddings.append(llm_embedding(text))
@@ -127,14 +150,16 @@ class NLPN:
         if numClusters == 0:
             # 这里可以优化，但在逻辑正常的情况下不会进入该过程，则就这样吧
             numClusters = 1
+
         # K-Means
         kmeans = KMeans(n_clusters=numClusters, random_state=42, n_init=12)
         kmeans.fit(embeddings)
+
         # 聚类数据分类
-        # classifiedData[label] -> [(text, type), ...]
+        # classifiedData -> [[(text, type), ...], ...]
         classifiedData = [[] for _ in range(numClusters)]
         for idx, label in enumerate(kmeans.labels_):
-            # tag-1 -> SourceData
+            # tag-1 -> SourceData，此时已无AuxiliaryData
             classifiedData[label] += [(output[idx], 1)]
         return classifiedData
             
@@ -150,26 +175,36 @@ class NLPN:
                     毕竟对于对话或者小说这种时序数据来说，无论多细微的数据都是有关联的
             2.(本次数据 + Top-3)实现数据互补及更新，即以本次数据为主对原始数据进行更新。
                 并由NLP算子决定是否增加记录以及是否删改原始记录，构造操作表
-            3.本次数据进行互相Top-k，同样向量查询Top-3进行数据互补(同次同级数据互补没必要)，然后依据操作表删改数据
+            3.依据操作表删改数据
         注：这里已经是高维数据了，没有必要再次使用K-Means聚类。
+
+        Args:
+        hiddenData -> 来自上一层的抽象结果原始列表[text, ...]
+        VectorDB -> 数据库操作对象，用于Query、Add、Delete
+
+        Returns:
+        lastID -> 最后一次添加的记录ID，当无被添加的记录时返回 -1
         '''
         # 搜寻Top-k并聚类
+        # classifiedData -> [[(text, tag, id)], ...]
+        # 注意：这里的classifiedData为了完成记录修改，其定义与其他函数中不同
         topK = 3
-        # 注意：这里的classifiedData[idx]为了完成记录修改，其定义与其他函数中不同
-        # classifiedData[idx] -> [(text, tag, id)]
         classifiedData = [[] for _ in range(len(hiddenData))]
         for idx, text in enumerate(hiddenData):
             # 要求vectorDB数据以{'content': '', ...}格式存储
             x = vectorDB.query(llm_embedding(text), topK)
             classifiedData[idx] += [(text, 1, 0)] + [(i[0]['content'], 0, i[1]) for i in x]
-        # 目前Top-k聚类完毕，接下来需要完成数据融合以及对删改的实现
+        
+        # 数据融合 以及 删改
+        lastID = -1
         for data in classifiedData:
+            # 数据融合 并 生成操作
             response = llm_ask(pmt_outputLayer.format(context=str(data)),mode='high', remark='OutputLayer')
             tempData = json.loads(response)
             if(len(tempData) == 0):
-                # 这附近绝对有问题！！！
-                # 这个循环只走了一遍。
                 continue
+
+            # 执行操作
             for d in tempData:
                 # {"operation": 0, "content": "增加记录", id: 0}
                 match d['operation']:
@@ -180,10 +215,6 @@ class NLPN:
                         # 删除记录
                         vectorDB.remove(d['id'])
         return lastID
-
-    def postLayer(self, data):
-        # 该架构中，postLayer已经无用。
-        pass
 
 # core = NLPN()
 # # 7条

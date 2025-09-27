@@ -69,6 +69,10 @@ class SimpleVectorDB:
             self._maybe_persist()
 
     def query(self, vector, k=5, return_data=True):
+        '''
+        Returns:
+        [(data, id, distance), ...]
+        '''
         vector = np.array(vector, dtype='float32')
 
         # 修正 k，防止超过已有数量
