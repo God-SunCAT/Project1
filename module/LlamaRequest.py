@@ -2,6 +2,7 @@ import logging
 import requests
 import json
 import os
+from openai import OpenAI
 
 logging.basicConfig(
     level=logging.INFO,
@@ -10,92 +11,52 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s -\n%(message)s"
 )
 
-def llm_ask_high(message, hideThinking=True, model="glm-4.5", temperature=0.6, api_key="<api-key>"):
-    """
-    向智谱AI接口发送请求，只需要提供 message。
-    返回完整回复字符串。
-    """
-    if(api_key == '<api-key>'):
-        api_key = os.getenv('BIGMODEL_KEY')
+client = OpenAI(
+    # 从环境变量中读取您的方舟API Key
+    api_key=os.environ.get("ARK_API_KEY"), 
+    base_url="https://ark.cn-beijing.volces.com/api/v3",
+    )
 
-    url = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+# 豆包
+def llm_ask(message, mode='high', remark=None):
+    model = "doubao-seed-1-6-thinking-250715"
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
+    completion = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "user", "content": message}
+        ]
+    )
 
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": message}],
-        "temperature": temperature
-    }
-
-    response = requests.post(url, headers=headers, json=payload)
-
-    if response.status_code != 200:
-        raise Exception(f"API调用失败: {response.status_code}, {response.text}")
-
-    data = response.json()
-    x = data['choices'][0]['message']['content']
-    return x
-
-
-def llm_ask_low(message, hideThinking=True, model="qwen3:8b-q4_K_M"):
-    """
-    向本地 Ollama 发送请求，只需要提供 message。
-    返回完整回复字符串。
-    """
-    url = "http://localhost:11434/api/chat"
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": message}]
-    }
-
-    response = requests.post(url, json=payload, stream=True)
-    answer = []
-    for line in response.iter_lines():
-        if line:
-            data = json.loads(line)
-            if "message" in data:
-                answer.append(data["message"]["content"])
-
-    x = "".join(answer)
-    if(hideThinking):
-        x2 = x.split("</think>")
-        if(len(x2) > 1):
-            x2 = ''.join(x2[1:])
-        else:
-            x2 = x2[0]
-    return x2
-
-def llm_ask(message, mode='low', remark=None):
-    if mode == 'low':
-        x = llm_ask_low(message)
-    else:
-        x = llm_ask_high(message)
+    thinking = '<None>'
+    if hasattr(completion.choices[0].message, 'reasoning_content'):
+        thinking = completion.choices[0].message.reasoning_content
     
     remark_ = 'Remark:' + remark + '\n' if remark != None else ''
+
     logging.info(
         '----\n'
-        f'{"<llm_ask_low>" if mode == "low" else "<llm_ask_high>"}\n'
+        f'<llm_ask_{model}>\n'
         f'{remark_}'
         'Question:\n'
         f'{message}\n'
+        'Thinking:\n'
+        f'{thinking}\n'
         'Answer:\n'
-        f'{x}\n'
+        f'{completion.choices[0].message.content}\n'
         '----\n'
     )
-    
-    return x
+    return completion.choices[0].message.content
 
-def llm_embedding(text, model="bge-m3-cpu"):
+def llm_embedding(text, useCPU=False):
     """
     调用 Ollama 本地 embedding 接口，获取文本向量。
     text: 需要生成 embedding 的文本
     model: embedding 模型（默认 bge-m3，需要本地先拉取 ollama pull bge-m3）
     返回 embedding 向量 (list[float])
     """
+    model = "bge-m3-cpu" if useCPU else "bge-m3"
+
     url = "http://localhost:11434/api/embeddings"
     payload = {
         "model": model,

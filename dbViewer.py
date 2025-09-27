@@ -48,8 +48,8 @@ if st.button("查询"):
         query_vector = llm_embedding(query_text)  # 这里可替换为 embedding
         results = db.query(query_vector, k=top_k)
         st.subheader("🔍 查询结果")
-        for i, (data, dist) in enumerate(results):
-            st.write(f"Rank {i+1} | 距离: {dist:.4f}")
+        for i, (data, id, dist) in enumerate(results):
+            st.write(f"Rank {i+1} | ID: {id} | 距离: {dist:.4f}")
             st.json(data)
     else:
         st.warning("请输入查询内容！")
