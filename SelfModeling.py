@@ -47,9 +47,9 @@ while True:
     print("==== 本次读取 ====")
     # print(text)
     print(f"下一次起始行号: {start}")
-    core.selfModeling(text, "伊芙 以及 伊芙特罗娜")
+    core.selfModeling(text, "伊芙")
     # 假设这里只读两段就退出
-    if start > 1000 or os.path.exists("STOP"):  # demo: 只读部分
+    if start > 110 or os.path.exists("STOP"):  # demo: 只读部分
         print(f"下一次起始行号: {start}")
         break
 # ==== 本次读取 ====

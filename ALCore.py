@@ -111,13 +111,15 @@ class AAL:
         # Mem-Refine
         t = time.time()
 
+        # 修改，应使得历史记录仅使用用户提问。以免造成自身记忆污染(要污染也要在NLPN中污染！)。
         history = \
             f'TimeStep - {self.ComMemDB.next_id - 2}\n' + \
             f'{self.ComMemDB.query_by_id(self.ComMemDB.next_id - 2)}\n' + \
             f'TimeStep - {self.ComMemDB.next_id - 1}\n' + \
             f'{self.ComMemDB.query_by_id(self.ComMemDB.next_id - 1)}\n' + \
             f'TimeStep - {self.ComMemDB.next_id}\n' + \
-            f'{str(self.conf['history'])}\n'
+            f'{str([i for i in self.conf["history"] if i[0] == lifeName])}\n'
+
         answer = llm_ask(
             pmt_ASK_MemRefine.format(question=message, context=str(result_list), history=history),
             mode='high'
