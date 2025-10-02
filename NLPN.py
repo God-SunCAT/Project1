@@ -1,9 +1,10 @@
 import json
 import logging
-from sklearn.cluster import KMeans
+# from sklearn.cluster import KMeans
+from sklearn.cluster import MeanShift, estimate_bandwidth
 from module.LlamaRequest import llm_ask, llm_embedding
 from module.NLPNPrompts import *
-from module.VectorDB import SimpleVectorDB
+from module.VectorDB import SimpleVectorDB, queryByWeight
 
 def llm(message, mode='low'):
     # LLM封装
@@ -92,21 +93,16 @@ class NLPN:
             AuxiliaryData[1] + SourceData[1],
             [0] * len(AuxiliaryData[0]) + [1] * len(SourceData[0])
         ]
-
-        # 确定聚类数量，每类约15个数据
-        numClusters = int(len(mixData[0]) / 15)
-        if numClusters == 0:
-            # 这里可以优化，但在逻辑正常的情况下不会进入该过程，则就这样吧
-            numClusters = 1
         
-        # K-Means
-        kmeans = KMeans(n_clusters=numClusters, random_state=42, n_init=12)
-        kmeans.fit(mixData[1])
+        # 聚类
+        bandwidth = estimate_bandwidth(mixData[1], quantile=0.2, n_samples=500)
+        ms = MeanShift(bandwidth=bandwidth)
+        labels = ms.fit_predict(mixData[1])
 
         # 聚类数据分类
         # classifiedData[label] -> [(text, type), ...]
-        classifiedData = [[] for _ in range(numClusters)]
-        for idx, label in enumerate(kmeans.labels_):
+        classifiedData = [[] for _ in range(len(set(labels)))]
+        for idx, label in enumerate(labels):
             classifiedData[label] += [(mixData[0][idx], mixData[2][idx])]
         return classifiedData
     
@@ -145,20 +141,15 @@ class NLPN:
         for text in output:
             embeddings.append(llm_embedding(text))
 
-        # 确定聚类数量，每类约15个数据
-        numClusters = int(len(output) / 15)
-        if numClusters == 0:
-            # 这里可以优化，但在逻辑正常的情况下不会进入该过程，则就这样吧
-            numClusters = 1
-
-        # K-Means
-        kmeans = KMeans(n_clusters=numClusters, random_state=42, n_init=12)
-        kmeans.fit(embeddings)
+        # 聚类
+        bandwidth = estimate_bandwidth(embeddings, quantile=0.2, n_samples=500)
+        ms = MeanShift(bandwidth=bandwidth)
+        labels = ms.fit_predict(embeddings)
 
         # 聚类数据分类
         # classifiedData -> [[(text, type), ...], ...]
-        classifiedData = [[] for _ in range(numClusters)]
-        for idx, label in enumerate(kmeans.labels_):
+        classifiedData = [[] for _ in range(len(set(labels)))]
+        for idx, label in enumerate(labels):
             # tag-1 -> SourceData，此时已无AuxiliaryData
             classifiedData[label] += [(output[idx], 1)]
         return classifiedData
@@ -188,11 +179,12 @@ class NLPN:
         # 搜寻Top-k并聚类
         # classifiedData -> [[(text, tag, id)], ...]
         # 注意：这里的classifiedData为了完成记录修改，其定义与其他函数中不同
-        topK = 3
+        topK = 6
         classifiedData = [[] for _ in range(len(hiddenData))]
         for idx, text in enumerate(hiddenData):
             # 要求vectorDB数据以{'content': '', ...}格式存储
-            x = vectorDB.query(llm_embedding(text), topK)
+            # x = vectorDB.query(llm_embedding(text), topK)
+            x = queryByWeight(vectorDB, llm_embedding(text), topK)
             classifiedData[idx] += [(text, 1, 0)] + [(i[0]['content'], 0, i[1]) for i in x]
         
         # 数据融合 以及 删改

@@ -1,10 +1,11 @@
 import json
+import time
 import os
 import pickle
 import logging
 from NLPN import NLPN
 from module.Prompts import *
-from module.VectorDB import SimpleVectorDB
+from module.VectorDB import SimpleVectorDB, queryByWeight
 from module.LlamaRequest import llm_ask, llm_embedding
 
 # 注意，标准的json最后一项没有 , 并且，只使用"
@@ -18,24 +19,36 @@ class AAL:
         self.ComMemDB = SimpleVectorDB(1024, 10000, "./db/CompressionMemory_VectorDB")
 
         # 读取配置数据
-        if os.path.exists('./data.pkl'):
-            with open('./data.pkl', "rb") as f:
+        if os.path.exists('./db/data.pkl'):
+            with open('./db/data.pkl', "rb") as f:
                 self.conf = pickle.load(f)
         else:
             # 其ID表示已读的最后一条
-            self.conf = {'Self': 0, 'Mem': 0}
+            # History [('role', 'content'), ...]
+            self.conf = {'self': 0, 'mem': 0, 'history': []}
     
-    def ask(self, message):
+    def ask(self, message, userName='User-001', lifeName='伊芙'):
         # 注:FNode = -1时会被忽略
 
         # Query-Rewriting
+        t = time.time()
+
         answer = llm_ask(pmt_ASK_QuestionSplit.format(context=message))
         data = json.loads(answer.strip())
         if(len(data) == 0):
             print('Error: Ask-Question Split Failed.')
             return 'Error'
         
+        logging.info(
+            '----\n'
+            'Time:Query-Rewriting:'
+            f'{(time.time() - t):.2f}秒\n'
+            '----\n'
+        )
+        
         # VectorDB-Query
+        t = time.time()
+
         result_Self = []
         result_Mem = []
         result_Cog = []
@@ -45,49 +58,110 @@ class AAL:
         for item in data:
             if('self' in item):
                 # Self-Modeling数据库
-                x = self.SelfDB.query(llm_embedding(item['self']))
+                # x = self.SelfDB.query(llm_embedding(item['self']))
+                x = queryByWeight(self.SelfDB, llm_embedding(item['self']), 5)
                 FNodes += [i[0]['fnode'] for i in x if i[0] is not None]
-                result_Self += [(i[0]['content'], i[0]['fnode']) for i in x if i[0] is not None]
+                # [(content, fnode, id, latest, DBType), ...]
+                # 注 latest = nextID - 1 所以这里已经预留出history的timeStep了
+                result_Self += [(i[0]['content'], i[0]['fnode'], i[1], self.SelfDB.next_id, 'self') for i in x if i[0] is not None]
             elif('mem' in item):
-                x = self.MemDB.query(llm_embedding(item['mem']))
+                # x = self.MemDB.query(llm_embedding(item['mem']))
+                x = queryByWeight(self.MemDB, llm_embedding(item['mem']), 5)
                 FNodes += [i[0]['fnode'] for i in x if i[0] is not None]
-                result_Mem += [(i[0]['content'], i[0]['fnode']) for i in x if i[0] is not None]
+                result_Mem += [(i[0]['content'], i[0]['fnode'], i[1], self.MemDB.next_id, 'detailMem') for i in x if i[0] is not None]
         result_Self = set(result_Self)
         result_Mem = set(result_Mem)
         # set 直接相加是非法操作，应该用并集运算
         result = result_Self | result_Mem
 
+        logging.info(
+            '----\n'
+            'Time:VectorDB-Query:'
+            f'{(time.time() - t):.2f}秒\n'
+            '----\n'
+        )
+
         # 构建 概括记忆与细节记忆 依赖
         # [{'node': 1, 'mem': '', 'detail': []}]
+        # [{'mem': ('content', time), 'detail': [('content', time, type)]}]
+        # (timeStep/latest) - (latest-timeStep) - (rate)
+        t = time.time()
+        
+        # 时间步格式化函数
+        getTime = lambda dataTime, latestTime: f'{dataTime}/{latestTime} - {latestTime - dataTime} - {((dataTime/latestTime) * 100):.2f}%'
+        # 数据序列化
         FNodes = set(FNodes)
         for i in FNodes:
             if(i == -1):
                 continue
             detail = []
-            for text, node in result:
+            for text, node, dataTime, latestTime, DBType in result:
                 if node == i:
-                    detail.append(text)
-            result_list.append({'mem': self.ComMemDB.query_by_id(i)['content'], 'detail': detail})
+                    detail.append((text, getTime(dataTime, latestTime), DBType))
+            result_list.append(
+                {'mem': (self.ComMemDB.query_by_id(i)['content'], getTime(i, self.ComMemDB.next_id)), 'detail': detail}
+            )
 
+        logging.info(
+            '----\n'
+            'Time:MakeList-Mem&detail:'
+            f'{(time.time() - t):.2f}秒\n'
+            '----\n'
+        )
         # Mem-Refine
-        answer = llm_ask(pmt_ASK_MemRefine.format(question=message, context=str(result_list)), mode='high')
+        t = time.time()
+
+        history = \
+            f'TimeStep - {self.ComMemDB.next_id - 2}\n' + \
+            f'{self.ComMemDB.query_by_id(self.ComMemDB.next_id - 2)}\n' + \
+            f'TimeStep - {self.ComMemDB.next_id - 1}\n' + \
+            f'{self.ComMemDB.query_by_id(self.ComMemDB.next_id - 1)}\n' + \
+            f'TimeStep - {self.ComMemDB.next_id}\n' + \
+            f'{str(self.conf['history'])}\n'
+        answer = llm_ask(
+            pmt_ASK_MemRefine.format(question=message, context=str(result_list), history=history),
+            mode='high'
+        )
 
         data = json.loads(answer.strip())
         if(len(data) == 0):
             print('Error: Mem-Compression Failed.')
             return 'Error'
         
+        logging.info(
+            '----\n'
+            'Time:Mem-Refine:'
+            f'{(time.time() - t):.2f}秒\n'
+            '----\n'
+        )
         # Humanization
+        t = time.time()
+
         answer = llm_ask(pmt_ASK_Humanization.format(question=message, context=data[0]['content']), mode='high')
 
         data = json.loads(answer.strip())
         if(len(data) == 0):
             print('Error: Humanization Failed.')
             return 'Error'
+        
+        logging.info(
+            '----\n'
+            'Time:Humanization:'
+            f'{(time.time() - t):.2f}秒\n'
+            '----\n'
+        )
+
+        # 保存历史记录
+        self.conf['history'].append((userName, message))
+        self.conf['history'].append((lifeName, data[0]['content']))
+
+        with open("./db/data.pkl", "wb") as f:  # wb = write binary
+            pickle.dump(self.conf, f)
+
         return data[0]['content']
 
 
-    def selfModeling(self, message, me=None):
+    def selfModeling(self, message, lifeName='伊芙'):
         # 注意：context表示上下文，content表示回复内容
         '''
         自我建模：
@@ -96,7 +170,7 @@ class AAL:
             3.写入向量数据库
         '''
         # Compression 先完成对概括类记忆的构建
-        answer = llm_ask(pmt_MEM_Compression.format(person={'Alice' if me == None else me}, context=message))
+        answer = llm_ask(pmt_MEM_Compression.format(person=lifeName, context=message))
         data = json.loads(answer.strip())
         if(len(data) == 0):
             print('Error: Make-CompressionMemory Failed.')
@@ -105,7 +179,7 @@ class AAL:
         FNode = self.ComMemDB.add(llm_embedding(data[0]['content']), data[0])
 
         # Question
-        answer = llm_ask(pmt_SM_Question.format(person={'Alice' if me == None else me}, context=message))
+        answer = llm_ask(pmt_SM_Question.format(person=lifeName, context=message))
         
         # Answer
         data = json.loads(answer.strip())
@@ -132,7 +206,7 @@ class AAL:
                 lastIDSelf = self.SelfDB.add(llm_embedding(item['content']), item)
                 
         # 事件记忆建模
-        answer = llm_ask(pmt_MEM_Modeling.format(person={'Alice' if me == None else me}, cognition=cognition, context=message))
+        answer = llm_ask(pmt_MEM_Modeling.format(person=lifeName, cognition=cognition, context=message))
 
         data = json.loads(answer.strip())
         if(len(data) == 0):
@@ -146,21 +220,21 @@ class AAL:
             lastIDMem = self.MemDB.add(llm_embedding(item['content']), item)
 
         # NLPN
-        n = 10
-        if(lastIDSelf - self.conf['Self'] >= n):
+        n = 30
+        if(lastIDSelf - self.conf['self'] >= n):
             # 读取最新的Self数据和Mem数据，并完成格式化
             # AuxiliaryData -> (text-list, embedding-list)
             # SourceData -> (text-list, embedding-list)
             logging.info(
                 '----\n'
                 '<NLPN-SelfModeling>\n'
-                f'[{self.conf.get("Self", 0) + 1}, {lastIDSelf}]\n'
+                f'[{self.conf.get("self", 0) + 1}, {lastIDSelf}]\n'
                 '----\n'
             )
             # 构造AuxiliaryData
             texts = []
             embeddings = []
-            for i in range(self.conf['Mem'] + 1, lastIDMem + 1, 1):
+            for i in range(self.conf['mem'] + 1, lastIDMem + 1, 1):
                 x = self.MemDB.query_by_id(i, True)
                 texts.append(x[1]['content'])
                 embeddings.append(x[0])
@@ -169,37 +243,15 @@ class AAL:
             # 构造SourceData
             texts = []
             embeddings = []
-            for i in range(self.conf['Self'] + 1, lastIDSelf + 1, 1):
+            for i in range(self.conf['self'] + 1, lastIDSelf + 1, 1):
                 x = self.SelfDB.query_by_id(i, True)
                 texts.append(x[1]['content'])
                 embeddings.append(x[0])
             source = (texts[:], embeddings[:])
             lastID = self.net.Modeling(aux, source, self.SelfDB)
 
-            self.conf['Self'] = lastID
-            self.conf['Mem'] = lastIDMem
-            with open("./data.pkl", "wb") as f:  # wb = write binary
+            self.conf['self'] = lastID
+            self.conf['mem'] = lastIDMem
+            with open("./db/data.pkl", "wb") as f:  # wb = write binary
                 pickle.dump(self.conf, f)
 
-
-            
-            
-
-
-# core = AAL()
-# core.selfModeling(
-# '''
-# 银河：
-
-# 你好！昨天我写了一封卑鄙的信，你一定伤心了。我太不对了。今天我痛悔不已。
-
-# 我怎么能背弃你呢。你是那么希望我成长起来，摆脱无所事事的软弱。我现在一步也离不开你，不然我又要不知做什么好了。
-
-# 我很难过的是，你身边那么多人都对我反目而视。我并不太坏呀。我要向你靠拢，可是一个人的惰性不是那么好克服的。有时我要旧态复萌，然后就后悔。你想，我从前根本不以为我可以合上社会潮流的节拍，现在不是试着去做了吗？我这样的人试一试就要先碰上几鼻子灰，不是情所当然的吗？我真的决心放弃以前的一切，只要你说怎么办。你又不说。
-
-# 我真的不知怎么才能和你亲近起来，你好像是一个可望而不可及的目标，我捉摸不透，追也追不上，就坐下哭了起来。
-
-# 算了，不多说。我只求你告诉我，我到底能不能得到你。我还不算太笨，还能干好多事情。你告诉我怎么办吧
-# '''
-# )
-# core.ask("你会控制你喜欢的人吗？你觉得你是一个很自私的人吗，未来满足去控制对方？")

@@ -104,8 +104,36 @@ class SimpleVectorDB:
             with open(self.persist_path + "_data.pkl", "wb") as f:
                 pickle.dump(self.data_store, f)
 
-# db = SimpleVectorDB()
-# db.add(np.random.rand(1024), {"content": "aaa", "ida": 2})
-# db.add(np.random.rand(1024), {"content": "bbb", "ida": 3, 'pica': 1})
-# db.add(np.random.rand(1024), {"content": "ccc", "ida": 2})
-# print(db.query(np.random.rand(1024)))
+def queryByWeight(db: SimpleVectorDB, vector, k=5):
+    '''
+    通过计算 时间,重要性,相关性 获得最终Top-k
+    Returns:
+    [(data, id, distance), ...]
+    '''
+    # 记录必须以字典形式存储，并且包含weight
+
+    # 余弦距离 = 1 - 余弦相似度
+    # 完全相同 → 距离 = 0
+    # 完全相反 → 距离 = 2
+    # 垂直（无关）→ 距离 = 1
+
+    # 最终结果计算公式: 
+    # (time/Latest)*1.5 + (1 - distance)*1.8 + (weight/10)*1.5
+
+    # results -> [(data, id, distance), ...]
+    
+    # 增量查询
+    results = db.query(vector, int(k * (1 + 0.5)))
+    weight = [0] * len(results)
+
+    # 计算权重
+    for idx, result in enumerate(results):
+        weight[idx] = (result[1] / (db.next_id - 1)) * 1.5 \
+            + (1 - result[2]) * 1.8 \
+            + (result[0]['weight'] / 10) * 1.5
+    
+    # 排序
+    arr = np.array(weight)
+    idList = np.argsort(arr)[::-1]
+
+    return [results[n] for idx, n in enumerate(idList) if idx < k]
