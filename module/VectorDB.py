@@ -71,7 +71,7 @@ class SimpleVectorDB:
     def query(self, vector, k=5, return_data=True):
         '''
         Returns:
-        [(data, id, distance), ...]
+        [[data, id, distance], ...]
         '''
         vector = np.array(vector, dtype='float32')
 
@@ -86,7 +86,7 @@ class SimpleVectorDB:
         distances_list = distances[0].tolist()
 
         if return_data:
-            results = [(self.data_store.get(l, None)[1], l, d) for l, d in zip(labels_list, distances_list)]
+            results = [[self.data_store.get(l, None)[1], l, d] for l, d in zip(labels_list, distances_list)]
         else:
             results = list(zip(labels_list, distances_list))
         return results
@@ -108,7 +108,7 @@ def queryByWeight(db: SimpleVectorDB, vector, k=5):
     '''
     通过计算 时间,重要性,相关性 获得最终Top-k
     Returns:
-    [(data, id, distance), ...]
+    [[data, id, distance], ...]
     '''
     # 记录必须以字典形式存储，并且包含weight
 
@@ -128,12 +128,12 @@ def queryByWeight(db: SimpleVectorDB, vector, k=5):
 
     # 计算权重
     for idx, result in enumerate(results):
-        weight[idx] = (result[1] / (db.next_id - 1)) * 1.5 \
-            + (1 - result[2]) * 1.8 \
-            + (result[0]['weight'] / 10) * 1.5
+        weight[idx] = (result[1] / (db.next_id - 1)) * 0.1 \
+            + (1 - result[2]) * 0.8 \
+            + (result[0]['weight'] / 10) * 0.1
+        results[idx][2] = weight[idx]
     
     # 排序
     arr = np.array(weight)
     idList = np.argsort(arr)[::-1]
-
     return [results[n] for idx, n in enumerate(idList) if idx < k]
