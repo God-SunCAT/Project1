@@ -118,7 +118,7 @@ class AAL:
             f'TimeStep - {self.ComMemDB.next_id - 1}\n' + \
             f'{self.ComMemDB.query_by_id(self.ComMemDB.next_id - 1)}\n' + \
             f'TimeStep - {self.ComMemDB.next_id}\n' + \
-            f'{str([i for i in self.conf["history"] if i[0] == lifeName])}\n'
+            f'{str([i for i in self.conf["history"] if i[0] == userName])}\n'
 
         answer = llm_ask(
             pmt_ASK_MemRefine.format(question=message, context=str(result_list), history=history),
