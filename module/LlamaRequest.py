@@ -19,6 +19,7 @@ client = OpenAI(
 
 # 豆包
 def llm_ask(message, mode='high', remark=None):
+
     model = "doubao-seed-1-6-thinking-250715"
 
     completion = client.chat.completions.create(

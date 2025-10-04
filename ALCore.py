@@ -137,21 +137,22 @@ class AAL:
             '----\n'
         )
         # Humanization
-        t = time.time()
+        # 对于记忆系统结果的后处理我是真没辙了，完全没想过怎么使用记忆。
+        # t = time.time()
 
-        answer = llm_ask(pmt_ASK_Humanization.format(question=message, context=data[0]['content']), mode='high')
+        # answer = llm_ask(pmt_ASK_Humanization.format(question=message, context=data[0]['content']), mode='high')
 
-        data = json.loads(answer.strip())
-        if(len(data) == 0):
-            print('Error: Humanization Failed.')
-            return 'Error'
+        # data = json.loads(answer.strip())
+        # if(len(data) == 0):
+        #     print('Error: Humanization Failed.')
+        #     return 'Error'
         
-        logging.info(
-            '----\n'
-            'Time:Humanization:'
-            f'{(time.time() - t):.2f}秒\n'
-            '----\n'
-        )
+        # logging.info(
+        #     '----\n'
+        #     'Time:Humanization:'
+        #     f'{(time.time() - t):.2f}秒\n'
+        #     '----\n'
+        # )
 
         # 保存历史记录
         self.conf['history'].append((userName, message))
@@ -176,7 +177,7 @@ class AAL:
         data = json.loads(answer.strip())
         if(len(data) == 0):
             print('Error: Make-CompressionMemory Failed.')
-            return
+            return -1, -1, -1
         
         FNode = self.ComMemDB.add(llm_embedding(data[0]['content']), data[0])
 
@@ -187,22 +188,22 @@ class AAL:
         data = json.loads(answer.strip())
         if(len(data) == 0):
             print('Error: Self-Modeling Question Failed.')
-            return
+            return -1, -1, -1
         cognition = ''
         for item in data:
             if(not 'content' in item):
                 print('Error: Self-Modeling Answer Failed.')
-                return
-            answer = llm_ask(pmt_SM_Answer.format(question=item['content'], context=message))
+                return -1, -1, -1
+            answer = llm_ask(pmt_SM_Answer.format(question=item['content'], context=message, person=lifeName))
             
             data2 = json.loads(answer.strip())
             if(len(data2) == 0):
                 print('Error: Self-Modeling Answer Failed.')
-                return
+                return -1, -1, -1
         
             for item in data2:
                 if(not 'content' in item or not 'weight' in item):
-                    return
+                    return -1, -1, -1
                 cognition += str(item) + "\n"
                 item['fnode'] = FNode
                 lastIDSelf = self.SelfDB.add(llm_embedding(item['content']), item)
@@ -213,11 +214,11 @@ class AAL:
         data = json.loads(answer.strip())
         if(len(data) == 0):
             print('Error: Memory-Modeling Answer Failed.')
-            return
+            return -1, -1, -1
 
         for item in data:
             if(not 'content' in item or not 'weight' in item):
-                return
+                return -1, -1, -1
             item['fnode'] = FNode
             lastIDMem = self.MemDB.add(llm_embedding(item['content']), item)
 
@@ -256,4 +257,6 @@ class AAL:
             self.conf['mem'] = lastIDMem
             with open("./db/data.pkl", "wb") as f:  # wb = write binary
                 pickle.dump(self.conf, f)
+        return self.SelfDB.next_id - 1, self.MemDB.next_id - 1, self.ComMemDB.next_id - 1
+
 

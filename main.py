@@ -24,6 +24,9 @@ questions = [
 ]
 
 core = AAL()
+
+core.ComMemDB.next_id = 21 # 410库我删了最新的两条数据，这样临时补救一下
+
 print("Project1 - An Advanced Artificial Life")
 
 for i in core.conf['history']:

@@ -1,8 +1,9 @@
 import os
+import time
 from ALCore import AAL
 
 def read_chunk(filepath, start_line=0, max_chars=2000):
-    """
+    '''
     分段读取文本，每次约 max_chars 字。
     如果最后一行超出限制，则整行推迟到下次读取。
     
@@ -12,12 +13,12 @@ def read_chunk(filepath, start_line=0, max_chars=2000):
     :return: (text, next_line)
              text: 本次读取的文本
              next_line: 下一次读取的起始行号
-    """
+    '''
     content = []
     char_count = 0
     next_line = start_line
 
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(filepath, 'r', encoding='utf-8') as f:
         # 跳过起始行之前的部分
         for _ in range(start_line):
             f.readline()
@@ -32,25 +33,32 @@ def read_chunk(filepath, start_line=0, max_chars=2000):
             char_count += line_len
             next_line += 1
 
-    return "".join(content), next_line
+    return ''.join(content), next_line
 
-
-# 使用示例
 core = AAL()
-filepath = ".\other\dataset\yifu.txt"
-start = 0
+filepath = '.\other\dataset\yifu.txt'
+start = 94
+
+tStart = time.time()
+
 while True:
     text, start = read_chunk(filepath, start)
     if not text:
-        print("读取结束")
+        print('==== - ====')
+        print('Completed')
         break
-    print("==== 本次读取 ====")
-    # print(text)
-    print(f"下一次起始行号: {start}")
-    core.selfModeling(text, "伊芙")
-    # 假设这里只读两段就退出
-    if start > 110 or os.path.exists("STOP"):  # demo: 只读部分
-        print(f"下一次起始行号: {start}")
+
+    print('==== - ====')
+    print(f'Next:{start}')
+
+    t = time.time()
+    a, b, c = core.selfModeling(text, '伊芙')
+
+    print(f'Self:{a}::Mem:{b}::ComMem:{c}::Next:{start}')
+    print(f'Time:{(time.time() - t):.2f}s::TotalSpend:{(time.time() - tStart):.2f}s')
+    
+    # 需要限制读取行数时自行修改条件
+    if start < -1 or os.path.exists('STOP'):  # 1000W Token你就跑吧
+        print('==== - ====')
+        print('Paused')
         break
-# ==== 本次读取 ====
-# 下一次起始行号: 113

@@ -7,6 +7,7 @@ import os
 # ========================
 # 数据库路径选择
 # ========================
+
 db_options = {
     "SelfModeling_VectorDB": "./db/SelfModeling_VectorDB",
     "DetailMemory_VectorDB": "./db/DetailMemory_VectorDB",
