@@ -25,7 +25,7 @@ questions = [
 
 core = AAL()
 
-core.ComMemDB.next_id = 21 # 410库我删了最新的两条数据，这样临时补救一下
+core.ComMemDB.next_id = 22 # 410库我删了最新的两条数据，这样临时补救一下
 
 print("Project1 - An Advanced Artificial Life")
 
@@ -48,10 +48,10 @@ while(True):
     print("伊芙:", output, f'\n<--> {(time.time() - t):.2f}秒')
 
     # 自我建模，这里为了方便就不使用多线程和线程锁了。
-    if(len(core.conf['history']) >= 10):
-        print('Self-Modeling启动')
-        core.selfModeling(core.conf['history'], '伊芙')
-        core.conf['history'] = []
-        with open("./db/data.pkl", "wb") as f:  # wb = write binary
-            pickle.dump(core.conf, f)
-        print('Self-Modeling运行完毕')
+    # if(len(core.conf['history']) >= 10):
+    #     print('Self-Modeling启动')
+    #     core.selfModeling(core.conf['history'], '伊芙')
+    #     core.conf['history'] = []
+    #     with open("./db/data.pkl", "wb") as f:  # wb = write binary
+    #         pickle.dump(core.conf, f)
+    #     print('Self-Modeling运行完毕')

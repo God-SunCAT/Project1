@@ -59,14 +59,14 @@ class AAL:
             if('self' in item):
                 # Self-Modeling数据库
                 # x = self.SelfDB.query(llm_embedding(item['self']))
-                x = queryByWeight(self.SelfDB, llm_embedding(item['self']), 5)
+                x = queryByWeight(self.SelfDB, llm_embedding(item['self']), 3)
                 FNodes += [i[0]['fnode'] for i in x if i[0] is not None]
                 # [(content, fnode, id, latest, DBType), ...]
                 # 注 latest = nextID - 1 所以这里已经预留出history的timeStep了
                 result_Self += [(i[0]['content'], i[0]['fnode'], i[1], self.SelfDB.next_id, 'self') for i in x if i[0] is not None]
             elif('mem' in item):
                 # x = self.MemDB.query(llm_embedding(item['mem']))
-                x = queryByWeight(self.MemDB, llm_embedding(item['mem']), 5)
+                x = queryByWeight(self.MemDB, llm_embedding(item['mem']), 3)
                 FNodes += [i[0]['fnode'] for i in x if i[0] is not None]
                 result_Mem += [(i[0]['content'], i[0]['fnode'], i[1], self.MemDB.next_id, 'detailMem') for i in x if i[0] is not None]
         result_Self = set(result_Self)
@@ -92,14 +92,15 @@ class AAL:
         # 数据序列化
         FNodes = set(FNodes)
         for i in FNodes:
-            if(i == -1):
-                continue
+            comMem = ('None - OtherType', 'Unk')
+            if(i != -1):
+                comMem = (self.ComMemDB.query_by_id(i)['content'], getTime(i, self.ComMemDB.next_id))
             detail = []
             for text, node, dataTime, latestTime, DBType in result:
                 if node == i:
                     detail.append((text, getTime(dataTime, latestTime), DBType))
             result_list.append(
-                {'mem': (self.ComMemDB.query_by_id(i)['content'], getTime(i, self.ComMemDB.next_id)), 'detail': detail}
+                {'mem': comMem, 'detail': detail}
             )
 
         logging.info(
